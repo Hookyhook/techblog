@@ -1,0 +1,33 @@
+name: deploy-frontend.yml
+on:
+  push:
+    branches:
+      - main
+jobs:
+  build:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v3
+        - name: Use Node.js 18.1
+          uses: actions/setup-node@v3
+          with:
+            node-version: "20.9"
+        - name: Login to private registry
+          uses: docker/login-action@v2
+          with:
+            registry: ${{ secrets.REGISTRY_URL }}
+            username: ${{ secrets.REGISTRY_USER }}
+            password: ${{ secrets.REGISTRY_PASSWORD }}
+        - name: Set up Docker Buildx
+          uses: docker/setup-buildx-action@v2
+        - name: Build and push
+          uses: docker/build-push-action@v4
+          with:
+            context: Frontend
+            file: Frontend/Docker/Dockerfile
+            builder: ${{ steps.buildx.outputs.name }}
+            push: true
+            tags: "${{ secrets.REGISTRY_URL }}/techblog-frontend:latest"
+            cache-from: "type=registry,ref=$${{ secrets.REGISTRY_URL }}/techblog-frontend:buildcache"
+            cache-to: "type=registry,ref=${{ secrets.REGISTRY_URL }}/techblog-frontend:buildcache,mode=max"
+
