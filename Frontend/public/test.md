@@ -1,787 +1,465 @@
-<!--
-Notes for maintaining this document:
+# body-parser
 
-*   Update the link for cm-html once in a while
--->
+[![NPM Version][npm-version-image]][npm-url]
+[![NPM Downloads][npm-downloads-image]][npm-url]
+[![Build Status][ci-image]][ci-url]
+[![Test Coverage][coveralls-image]][coveralls-url]
 
-# react-markdown
+Node.js body parsing middleware.
 
-[![Build][build-badge]][build]
-[![Coverage][coverage-badge]][coverage]
-[![Downloads][downloads-badge]][downloads]
-[![Size][size-badge]][size]
-[![Sponsors][sponsors-badge]][collective]
-[![Backers][backers-badge]][collective]
-[![Chat][chat-badge]][chat]
+Parse incoming request bodies in a middleware before your handlers, available
+under the `req.body` property.
 
-React component to render markdown.
+**Note** As `req.body`'s shape is based on user-controlled input, all
+properties and values in this object are untrusted and should be validated
+before trusting. For example, `req.body.foo.toString()` may fail in multiple
+ways, for example the `foo` property may not be there or may not be a string,
+and `toString` may not be a function and instead a string or other user input.
 
-## Feature highlights
+[Learn about the anatomy of an HTTP transaction in Node.js](https://nodejs.org/en/docs/guides/anatomy-of-an-http-transaction/).
 
-- [x] **[safe][section-security] by default**
-      (no dangerouslySetInnerHTML or XSS attacks)
-- [x] **[components][section-components]**
-      (pass your own component to use instead of <h2> for ## hi)
-- [x] **[plugins][section-plugins]**
-      (many plugins you can pick and choose from)
-- [x] **[compliant][section-syntax]**
-      (100% to CommonMark, 100% to GFM with a plugin)
+_This does not handle multipart bodies_, due to their complex and typically
+large nature. For multipart bodies, you may be interested in the following
+modules:
 
-## Contents
+- [busboy](https://www.npmjs.org/package/busboy#readme) and
+  [connect-busboy](https://www.npmjs.org/package/connect-busboy#readme)
+- [multiparty](https://www.npmjs.org/package/multiparty#readme) and
+  [connect-multiparty](https://www.npmjs.org/package/connect-multiparty#readme)
+- [formidable](https://www.npmjs.org/package/formidable#readme)
+- [multer](https://www.npmjs.org/package/multer#readme)
 
-## What is this?
+This module provides the following parsers:
 
-This package is a [React][] component that can be given a string of markdown
-that it’ll safely render to React elements.
-You can pass plugins to change how markdown is transformed and pass components
-that will be used instead of normal HTML elements.
+- [JSON body parser](#bodyparserjsonoptions)
+- [Raw body parser](#bodyparserrawoptions)
+- [Text body parser](#bodyparsertextoptions)
+- [URL-encoded form body parser](#bodyparserurlencodedoptions)
 
-- to learn markdown, see this [cheatsheet and tutorial][commonmark-help]
-- to try out react-markdown, see [our demo][demo]
+Other body parsers you might be interested in:
 
-## When should I use this?
+- [body](https://www.npmjs.org/package/body#readme)
+- [co-body](https://www.npmjs.org/package/co-body#readme)
 
-There are other ways to use markdown in React out there so why use this one?
-The three main reasons are that they often rely on dangerouslySetInnerHTML,
-have bugs with how they handle markdown, or don’t let you swap elements for
-components.
-react-markdown builds a virtual DOM, so React only replaces what changed,
-from a syntax tree.
-That’s supported because we use [unified][], specifically [remark][] for
-markdown and [rehype][] for HTML, which are popular tools to transform content
-with plugins.
+## Installation
 
-This package focusses on making it easy for beginners to safely use markdown in
-React.
-When you’re familiar with unified, you can use a modern hooks based alternative
-[react-remark][react-remark] or [rehype-react][rehype-react] manually.
-If you instead want to use JavaScript and JSX _inside_ markdown files, use
-[MDX][].
-
-## Install
-
-This package is [ESM only][esm].
-In Node.js (version 16+), install with [npm][]:
-
-sh
-npm install react-markdown
-
-In Deno with [esm.sh][esmsh]:
-
-js
-import Markdown from "https://esm.sh/react-markdown@9";
-
-In browsers with [esm.sh][esmsh]:
-
-html
-
-<script type="module">
-  import Markdown from "https://esm.sh/react-markdown@9?bundle";
-</script>
-
-## Use
-
-A basic hello world:
-
-jsx
-import React from "react";
-import { createRoot } from "react-dom/client";
-import Markdown from "react-markdown";
-
-const markdown = "# Hi, _Pluto_!";
-
-createRoot(document.body).render(<Markdown>{markdown}</Markdown>);
-
-<details>
-<summary>Show equivalent JSX</summary>
-
-jsx
-
-<h1>
-  Hi, <em>Pluto</em>!
-</h1>
-
-</details>
-
-Here is an example that shows how to use a plugin ([remark-gfm][remark-gfm],
-which adds support for footnotes, strikethrough, tables, tasklists and URLs
-directly):
-
-jsx
-import React from "react";
-import { createRoot } from "react-dom/client";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-
-const markdown = Just a link: www.nasa.gov.;
-
-createRoot(document.body).render(
-<Markdown remarkPlugins={[remarkGfm]}>{markdown}</Markdown>
-);
-
-<details>
-<summary>Show equivalent JSX</summary>
-
-jsx
-
-<p>
-  Just a link: <a href="http://www.nasa.gov">www.nasa.gov</a>.
-</p>
-
-</details>
+```sh
+$ npm install body-parser
+```
 
 ## API
 
-This package exports the following identifier:
-[defaultUrlTransform][api-default-url-transform].
-The default export is [Markdown][api-markdown].
+```js
+var bodyParser = require("body-parser");
+```
 
-### Markdown
+The `bodyParser` object exposes various factories to create middlewares. All
+middlewares will populate the `req.body` property with the parsed body when
+the `Content-Type` request header matches the `type` option, or an empty
+object (`{}`) if there was no body to parse, the `Content-Type` was not matched,
+or an error occurred.
 
-Component to render markdown.
+The various errors returned by this module are described in the
+[errors section](#errors).
 
-###### Parameters
+### bodyParser.json([options])
 
-- options ([Options][api-options])
-  — props
+Returns middleware that only parses `json` and only looks at requests where
+the `Content-Type` header matches the `type` option. This parser accepts any
+Unicode encoding of the body and supports automatic inflation of `gzip` and
+`deflate` encodings.
 
-###### Returns
+A new `body` object containing the parsed data is populated on the `request`
+object after the middleware (i.e. `req.body`).
 
-React element (JSX.Element).
+#### Options
 
-### defaultUrlTransform(url)
+The `json` function takes an optional `options` object that may contain any of
+the following keys:
 
-Make a URL safe.
+##### inflate
 
-###### Parameters
+When set to `true`, then deflated (compressed) bodies will be inflated; when
+`false`, deflated bodies are rejected. Defaults to `true`.
 
-- url (string)
-  — URL
+##### limit
 
-###### Returns
+Controls the maximum request body size. If this is a number, then the value
+specifies the number of bytes; if it is a string, the value is passed to the
+[bytes](https://www.npmjs.com/package/bytes) library for parsing. Defaults
+to `'100kb'`.
 
-Safe URL (string).
+##### reviver
 
-### AllowElement
+The `reviver` option is passed directly to `JSON.parse` as the second
+argument. You can find more information on this argument
+[in the MDN documentation about JSON.parse](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/parse#Example.3A_Using_the_reviver_parameter).
 
-Filter elements (TypeScript type).
+##### strict
 
-###### Parameters
+When set to `true`, will only accept arrays and objects; when `false` will
+accept anything `JSON.parse` accepts. Defaults to `true`.
 
-- node ([Element from hast][hast-element])
-  — element to check
-- index (number | undefined)
-  — index of element in parent
-- parent ([Node from hast][hast-node])
-  — parent of element
+##### type
 
-###### Returns
+The `type` option is used to determine what media type the middleware will
+parse. This option can be a string, array of strings, or a function. If not a
+function, `type` option is passed directly to the
+[type-is](https://www.npmjs.org/package/type-is#readme) library and this can
+be an extension name (like `json`), a mime type (like `application/json`), or
+a mime type with a wildcard (like `*/*` or `*/json`). If a function, the `type`
+option is called as `fn(req)` and the request is parsed if it returns a truthy
+value. Defaults to `application/json`.
 
-Whether to allow element (boolean, optional).
+##### verify
 
-### Components
+The `verify` option, if supplied, is called as `verify(req, res, buf, encoding)`,
+where `buf` is a `Buffer` of the raw request body and `encoding` is the
+encoding of the request. The parsing can be aborted by throwing an error.
 
-Map tag names to components (TypeScript type).
+### bodyParser.raw([options])
 
-###### Type
+Returns middleware that parses all bodies as a `Buffer` and only looks at
+requests where the `Content-Type` header matches the `type` option. This
+parser supports automatic inflation of `gzip` and `deflate` encodings.
 
-ts
-import type { Element } from "hast";
+A new `body` object containing the parsed data is populated on the `request`
+object after the middleware (i.e. `req.body`). This will be a `Buffer` object
+of the body.
 
-type Components = Partial<{
-[TagName in keyof JSX.IntrinsicElements]: // Class component:
-| (new (
-props: JSX.IntrinsicElements[TagName] & ExtraProps
-) => JSX.ElementClass)
-// Function component:
-| ((
-props: JSX.IntrinsicElements[TagName] & ExtraProps
-) => JSX.Element | string | null | undefined)
-// Tag name:
-| keyof JSX.IntrinsicElements;
-}>;
+#### Options
 
-### ExtraProps
+The `raw` function takes an optional `options` object that may contain any of
+the following keys:
 
-Extra fields we pass to components (TypeScript type).
+##### inflate
 
-###### Fields
+When set to `true`, then deflated (compressed) bodies will be inflated; when
+`false`, deflated bodies are rejected. Defaults to `true`.
 
-- node ([Element from hast][hast-element], optional)
-  — original node
+##### limit
 
-### Options
+Controls the maximum request body size. If this is a number, then the value
+specifies the number of bytes; if it is a string, the value is passed to the
+[bytes](https://www.npmjs.com/package/bytes) library for parsing. Defaults
+to `'100kb'`.
 
-Configuration (TypeScript type).
+##### type
 
-###### Fields
+The `type` option is used to determine what media type the middleware will
+parse. This option can be a string, array of strings, or a function.
+If not a function, `type` option is passed directly to the
+[type-is](https://www.npmjs.org/package/type-is#readme) library and this
+can be an extension name (like `bin`), a mime type (like
+`application/octet-stream`), or a mime type with a wildcard (like `*/*` or
+`application/*`). If a function, the `type` option is called as `fn(req)`
+and the request is parsed if it returns a truthy value. Defaults to
+`application/octet-stream`.
 
-- allowElement ([AllowElement][api-allow-element], optional)
-  — filter elements;
-  allowedElements / disallowedElements is used first
-- allowedElements (Array<string>, default: all tag names)
-  — tag names to allow;
-  cannot combine w/ disallowedElements
-- children (string, optional)
-  — markdown
-- className (string, optional)
-  — wrap in a div with this class name
-- components ([Components][api-components], optional)
-  — map tag names to components
-- disallowedElements (Array<string>, default: [])
-  — tag names to disallow;
-  cannot combine w/ allowedElements
-- rehypePlugins (Array<Plugin>, optional)
-  — list of [rehype plugins][rehype-plugins] to use
-- remarkPlugins (Array<Plugin>, optional)
-  — list of [remark plugins][remark-plugins] to use
-- remarkRehypeOptions ([Options from
-  remark-rehype][remark-rehype-options], optional)
-  — options to pass through to remark-rehype
-- skipHtml (boolean, default: false)
-  — ignore HTML in markdown completely
-- unwrapDisallowed (boolean, default: false)
-  — extract (unwrap) what’s in disallowed elements;
-  normally when say strong is not allowed, it and it’s children are dropped,
-  with unwrapDisallowed the element itself is replaced by its children
-- urlTransform ([UrlTransform][api-url-transform], default:
-  [defaultUrlTransform][api-default-url-transform])
-  — change URLs
+##### verify
 
-### UrlTransform
+The `verify` option, if supplied, is called as `verify(req, res, buf, encoding)`,
+where `buf` is a `Buffer` of the raw request body and `encoding` is the
+encoding of the request. The parsing can be aborted by throwing an error.
 
-Transform URLs (TypeScript type).
+### bodyParser.text([options])
 
-###### Parameters
+Returns middleware that parses all bodies as a string and only looks at
+requests where the `Content-Type` header matches the `type` option. This
+parser supports automatic inflation of `gzip` and `deflate` encodings.
 
-- url (string)
-  — URL
-- key (string, example: 'href')
-  — property name
-- node ([Element from hast][hast-element])
-  — element to check
+A new `body` string containing the parsed data is populated on the `request`
+object after the middleware (i.e. `req.body`). This will be a string of the
+body.
 
-###### Returns
+#### Options
 
-Transformed URL (string, optional).
+The `text` function takes an optional `options` object that may contain any of
+the following keys:
+
+##### defaultCharset
+
+Specify the default character set for the text content if the charset is not
+specified in the `Content-Type` header of the request. Defaults to `utf-8`.
+
+##### inflate
+
+When set to `true`, then deflated (compressed) bodies will be inflated; when
+`false`, deflated bodies are rejected. Defaults to `true`.
+
+##### limit
+
+Controls the maximum request body size. If this is a number, then the value
+specifies the number of bytes; if it is a string, the value is passed to the
+[bytes](https://www.npmjs.com/package/bytes) library for parsing. Defaults
+to `'100kb'`.
+
+##### type
+
+The `type` option is used to determine what media type the middleware will
+parse. This option can be a string, array of strings, or a function. If not
+a function, `type` option is passed directly to the
+[type-is](https://www.npmjs.org/package/type-is#readme) library and this can
+be an extension name (like `txt`), a mime type (like `text/plain`), or a mime
+type with a wildcard (like `*/*` or `text/*`). If a function, the `type`
+option is called as `fn(req)` and the request is parsed if it returns a
+truthy value. Defaults to `text/plain`.
+
+##### verify
+
+The `verify` option, if supplied, is called as `verify(req, res, buf, encoding)`,
+where `buf` is a `Buffer` of the raw request body and `encoding` is the
+encoding of the request. The parsing can be aborted by throwing an error.
+
+### bodyParser.urlencoded([options])
+
+Returns middleware that only parses `urlencoded` bodies and only looks at
+requests where the `Content-Type` header matches the `type` option. This
+parser accepts only UTF-8 encoding of the body and supports automatic
+inflation of `gzip` and `deflate` encodings.
+
+A new `body` object containing the parsed data is populated on the `request`
+object after the middleware (i.e. `req.body`). This object will contain
+key-value pairs, where the value can be a string or array (when `extended` is
+`false`), or any type (when `extended` is `true`).
+
+#### Options
+
+The `urlencoded` function takes an optional `options` object that may contain
+any of the following keys:
+
+##### extended
+
+The `extended` option allows to choose between parsing the URL-encoded data
+with the `querystring` library (when `false`) or the `qs` library (when
+`true`). The "extended" syntax allows for rich objects and arrays to be
+encoded into the URL-encoded format, allowing for a JSON-like experience
+with URL-encoded. For more information, please
+[see the qs library](https://www.npmjs.org/package/qs#readme).
+
+Defaults to `true`, but using the default has been deprecated. Please
+research into the difference between `qs` and `querystring` and choose the
+appropriate setting.
+
+##### inflate
+
+When set to `true`, then deflated (compressed) bodies will be inflated; when
+`false`, deflated bodies are rejected. Defaults to `true`.
+
+##### limit
+
+Controls the maximum request body size. If this is a number, then the value
+specifies the number of bytes; if it is a string, the value is passed to the
+[bytes](https://www.npmjs.com/package/bytes) library for parsing. Defaults
+to `'100kb'`.
+
+##### parameterLimit
+
+The `parameterLimit` option controls the maximum number of parameters that
+are allowed in the URL-encoded data. If a request contains more parameters
+than this value, a 413 will be returned to the client. Defaults to `1000`.
+
+##### type
+
+The `type` option is used to determine what media type the middleware will
+parse. This option can be a string, array of strings, or a function. If not
+a function, `type` option is passed directly to the
+[type-is](https://www.npmjs.org/package/type-is#readme) library and this can
+be an extension name (like `urlencoded`), a mime type (like
+`application/x-www-form-urlencoded`), or a mime type with a wildcard (like
+`*/x-www-form-urlencoded`). If a function, the `type` option is called as
+`fn(req)` and the request is parsed if it returns a truthy value. Defaults
+to `application/x-www-form-urlencoded`.
+
+##### verify
+
+The `verify` option, if supplied, is called as `verify(req, res, buf, encoding)`,
+where `buf` is a `Buffer` of the raw request body and `encoding` is the
+encoding of the request. The parsing can be aborted by throwing an error.
+
+## Errors
+
+The middlewares provided by this module create errors using the
+[`http-errors` module](https://www.npmjs.com/package/http-errors). The errors
+will typically have a `status`/`statusCode` property that contains the suggested
+HTTP response code, an `expose` property to determine if the `message` property
+should be displayed to the client, a `type` property to determine the type of
+error without matching against the `message`, and a `body` property containing
+the read body, if available.
+
+The following are the common errors created, though any error can come through
+for various reasons.
+
+### content encoding unsupported
+
+This error will occur when the request had a `Content-Encoding` header that
+contained an encoding but the "inflation" option was set to `false`. The
+`status` property is set to `415`, the `type` property is set to
+`'encoding.unsupported'`, and the `charset` property will be set to the
+encoding that is unsupported.
+
+### entity parse failed
+
+This error will occur when the request contained an entity that could not be
+parsed by the middleware. The `status` property is set to `400`, the `type`
+property is set to `'entity.parse.failed'`, and the `body` property is set to
+the entity value that failed parsing.
+
+### entity verify failed
+
+This error will occur when the request contained an entity that could not be
+failed verification by the defined `verify` option. The `status` property is
+set to `403`, the `type` property is set to `'entity.verify.failed'`, and the
+`body` property is set to the entity value that failed verification.
+
+### request aborted
+
+This error will occur when the request is aborted by the client before reading
+the body has finished. The `received` property will be set to the number of
+bytes received before the request was aborted and the `expected` property is
+set to the number of expected bytes. The `status` property is set to `400`
+and `type` property is set to `'request.aborted'`.
+
+### request entity too large
+
+This error will occur when the request body's size is larger than the "limit"
+option. The `limit` property will be set to the byte limit and the `length`
+property will be set to the request body's length. The `status` property is
+set to `413` and the `type` property is set to `'entity.too.large'`.
+
+### request size did not match content length
+
+This error will occur when the request's length did not match the length from
+the `Content-Length` header. This typically occurs when the request is malformed,
+typically when the `Content-Length` header was calculated based on characters
+instead of bytes. The `status` property is set to `400` and the `type` property
+is set to `'request.size.invalid'`.
+
+### stream encoding should not be set
+
+This error will occur when something called the `req.setEncoding` method prior
+to this middleware. This module operates directly on bytes only and you cannot
+call `req.setEncoding` when using this module. The `status` property is set to
+`500` and the `type` property is set to `'stream.encoding.set'`.
+
+### stream is not readable
+
+This error will occur when the request is no longer readable when this middleware
+attempts to read it. This typically means something other than a middleware from
+this module read the request body already and the middleware was also configured to
+read the same request. The `status` property is set to `500` and the `type`
+property is set to `'stream.not.readable'`.
+
+### too many parameters
+
+This error will occur when the content of the request exceeds the configured
+`parameterLimit` for the `urlencoded` parser. The `status` property is set to
+`413` and the `type` property is set to `'parameters.too.many'`.
+
+### unsupported charset "BOGUS"
+
+This error will occur when the request had a charset parameter in the
+`Content-Type` header, but the `iconv-lite` module does not support it OR the
+parser does not support it. The charset is contained in the message as well
+as in the `charset` property. The `status` property is set to `415`, the
+`type` property is set to `'charset.unsupported'`, and the `charset` property
+is set to the charset that is unsupported.
+
+### unsupported content encoding "bogus"
+
+This error will occur when the request had a `Content-Encoding` header that
+contained an unsupported encoding. The encoding is contained in the message
+as well as in the `encoding` property. The `status` property is set to `415`,
+the `type` property is set to `'encoding.unsupported'`, and the `encoding`
+property is set to the encoding that is unsupported.
 
 ## Examples
 
-### Use a plugin
+### Express/Connect top-level generic
 
-This example shows how to use a remark plugin.
-In this case, [remark-gfm][remark-gfm], which adds support for strikethrough,
-tables, tasklists and URLs directly:
-
-jsx
-import React from "react";
-import { createRoot } from "react-dom/client";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-
-const markdown = A paragraph with _emphasis_ and **strong importance**.
-
-> A block quote with ~strikethrough~ and a URL: https://reactjs.org.
-
-- Lists
-- [ ] todo
-- [x] done
-
-A table:
-
-| a   | b   |
-| --- | --- |
-
-;
-
-createRoot(document.body).render(
-<Markdown remarkPlugins={[remarkGfm]}>{markdown}</Markdown>
-);
-
-<details>
-<summary>Show equivalent JSX</summary>
-
-jsx
-<>
-
-  <p>
-    A paragraph with <em>emphasis</em> and <strong>strong importance</strong>.
-  </p>
-  <blockquote>
-    <p>
-      A block quote with <del>strikethrough</del> and a URL:{" "}
-      <a href="https://reactjs.org">https://reactjs.org</a>.
-    </p>
-  </blockquote>
-  <ul className="contains-task-list">
-    <li>Lists</li>
-    <li className="task-list-item">
-      <input type="checkbox" disabled /> todo
-    </li>
-    <li className="task-list-item">
-      <input type="checkbox" disabled checked /> done
-    </li>
-  </ul>
-  <p>A table:</p>
-  <table>
-    <thead>
-      <tr>
-        <th>a</th>
-        <th>b</th>
-      </tr>
-    </thead>
-  </table>
-</>
-
-</details>
-
-### Use a plugin with options
-
-This example shows how to use a plugin and give it options.
-To do that, use an array with the plugin at the first place, and the options
-second.
-[remark-gfm][remark-gfm] has an option to allow only double tildes for
-strikethrough:
-
-jsx
-import React from "react";
-import { createRoot } from "react-dom/client";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-
-const markdown = "This ~is not~ strikethrough, but ~~this is~~!";
-
-createRoot(document.body).render(
-<Markdown remarkPlugins={[[remarkGfm, { singleTilde: false }]]}>
-{markdown}
-</Markdown>
-);
-
-<details>
-<summary>Show equivalent JSX</summary>
-
-jsx
-
-<p>
-  This ~is not~ strikethrough, but <del>this is</del>!
-</p>
-
-</details>
-
-### Use custom components (syntax highlight)
-
-This example shows how you can overwrite the normal handling of an element by
-passing a component.
-In this case, we apply syntax highlighting with the seriously super amazing
-[react-syntax-highlighter][react-syntax-highlighter] by
-[**@conorhastings**][conor]:
-
-<!-- To do: currently broken on actual ESM; let’s find an alternative? -->
-
-jsx
-import React from "react";
-import { createRoot } from "react-dom/client";
-import Markdown from "react-markdown";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { dark } from "react-syntax-highlighter/dist/esm/styles/prism";
-
-// Did you know you can use tildes instead of backticks for code in markdown? ✨
-const markdown = Here is some JavaScript code:
+This example demonstrates adding a generic JSON and URL-encoded parser as a
+top-level middleware, which will parse the bodies of all incoming requests.
+This is the simplest setup.
 
 ```js
-console.log("It works!");
+var express = require("express");
+var bodyParser = require("body-parser");
+
+var app = express();
+
+// parse application/x-www-form-urlencoded
+app.use(bodyParser.urlencoded({ extended: false }));
+
+// parse application/json
+app.use(bodyParser.json());
+
+app.use(function (req, res) {
+  res.setHeader("Content-Type", "text/plain");
+  res.write("you posted:\n");
+  res.end(JSON.stringify(req.body, null, 2));
+});
 ```
 
-;
+### Express route-specific
 
-createRoot(document.body).render(
-<Markdown
-children={markdown}
-components={{
-      code(props) {
-        const { children, className, node, ...rest } = props;
-        const match = /language-(\w+)/.exec(className || "");
-        return match ? (
-          <SyntaxHighlighter
-            {...rest}
-            PreTag="div"
-            children={String(children).replace(/\n$/, "")}
-            language={match[1]}
-            style={dark}
-          />
-        ) : (
-          <code {...rest} className={className}>
-            {children}
-          </code>
-        );
-      },
-    }}
-/>
-);
+This example demonstrates adding body parsers specifically to the routes that
+need them. In general, this is the most recommended way to use body-parser with
+Express.
 
-<details>
-<summary>Show equivalent JSX</summary>
+```js
+var express = require("express");
+var bodyParser = require("body-parser");
 
-jsx
-<>
+var app = express();
 
-  <p>Here is some JavaScript code:</p>
-  <pre>
-    <SyntaxHighlighter
-      language="js"
-      style={dark}
-      PreTag="div"
-      children="console.log('It works!')"
-    />
-  </pre>
-</>
+// create application/json parser
+var jsonParser = bodyParser.json();
 
-</details>
+// create application/x-www-form-urlencoded parser
+var urlencodedParser = bodyParser.urlencoded({ extended: false });
 
-### Use remark and rehype plugins (math)
+// POST /login gets urlencoded bodies
+app.post("/login", urlencodedParser, function (req, res) {
+  res.send("welcome, " + req.body.username);
+});
 
-This example shows how a syntax extension (through [remark-math][remark-math])
-is used to support math in markdown, and a transform plugin
-([rehype-katex][rehype-katex]) to render that math.
+// POST /api/users gets JSON bodies
+app.post("/api/users", jsonParser, function (req, res) {
+  // create user in req.body
+});
+```
 
-jsx
-import React from "react";
-import { createRoot } from "react-dom/client";
-import Markdown from "react-markdown";
-import rehypeKatex from "rehype-katex";
-import remarkMath from "remark-math";
-import "katex/dist/katex.min.css"; // rehype-katex does not import the CSS for you
+### Change accepted type for parsers
 
-const markdown = The lift coefficient ($C_L$) is a dimensionless coefficient.;
+All the parsers accept a `type` option which allows you to change the
+`Content-Type` that the middleware will parse.
 
-createRoot(document.body).render(
-<Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-{markdown}
-</Markdown>
-);
+```js
+var express = require("express");
+var bodyParser = require("body-parser");
 
-<details>
-<summary>Show equivalent JSX</summary>
+var app = express();
 
-jsx
+// parse various different custom JSON types as JSON
+app.use(bodyParser.json({ type: "application/*+json" }));
 
-<p>
-  The lift coefficient (
-  <span className="katex">
-    <span className="katex-mathml">
-      <math xmlns="http://www.w3.org/1998/Math/MathML">{/* … */}</math>
-    </span>
-    <span className="katex-html" aria-hidden="true">
-      {/* … */}
-    </span>
-  </span>
-  ) is a dimensionless coefficient.
-</p>
+// parse some custom thing into a Buffer
+app.use(bodyParser.raw({ type: "application/vnd.custom-type" }));
 
-</details>
-
-## Plugins
-
-We use [unified][], specifically [remark][] for markdown and [rehype][] for
-HTML, which are tools to transform content with plugins.
-Here are three good ways to find plugins:
-
-- [awesome-remark][awesome-remark] and [awesome-rehype][awesome-rehype]
-  — selection of the most awesome projects
-- [List of remark plugins][remark-plugins] and
-  [list of rehype plugins][rehype-plugins]
-  — list of all plugins
-- [remark-plugin][remark-plugin] and [rehype-plugin][rehype-plugin] topics
-  — any tagged repo on GitHub
-
-## Syntax
-
-react-markdown follows CommonMark, which standardizes the differences between
-markdown implementations, by default.
-Some syntax extensions are supported through plugins.
-
-We use [micromark][micromark] under the hood for our parsing.
-See its documentation for more information on markdown, CommonMark, and
-extensions.
-
-## Types
-
-This package is fully typed with [TypeScript][].
-It exports the additional types
-[AllowElement][api-allow-element],
-[ExtraProps][api-extra-props],
-[Components][api-components],
-[Options][api-options], and
-[UrlTransform][api-url-transform].
-
-## Compatibility
-
-Projects maintained by the unified collective are compatible with maintained
-versions of Node.js.
-
-When we cut a new major release, we drop support for unmaintained versions of
-Node.
-This means we try to keep the current release line, react-markdown@^9,
-compatible with Node.js 16.
-
-They work in all modern browsers (essentially: everything not IE 11).
-You can use a bundler (such as esbuild, webpack, or Rollup) to use this package
-in your project, and use its options (or plugins) to add support for legacy
-browsers.
-
-## Architecture
-
-<pre><code>                                                           react-markdown
-         +----------------------------------------------------------------------------------------------------------------+
-         |                                                                                                                |
-         |  +----------+        +----------------+        +---------------+       +----------------+       +------------+ |
-         |  |          |        |                |        |               |       |                |       |            | |
-<a href="https://commonmark.org">markdown</a>-+->+  <a href="https://github.com/remarkjs/remark">remark</a>  +-<a href="https://github.com/syntax-tree/mdast">mdast</a>->+ <a href="https://github.com/remarkjs/remark/blob/main/doc/plugins.md">remark plugins</a> +-<a href="https://github.com/syntax-tree/mdast">mdast</a>->+ <a href="https://github.com/remarkjs/remark-rehype">remark-rehype</a> +-<a href="https://github.com/syntax-tree/hast">hast</a>->+ <a href="https://github.com/rehypejs/rehype/blob/main/doc/plugins.md">rehype plugins</a> +-<a href="https://github.com/syntax-tree/hast">hast</a>->+ <a href="#appendix-b-components">components</a> +-+->react elements
-         |  |          |        |                |        |               |       |                |       |            | |
-         |  +----------+        +----------------+        +---------------+       +----------------+       +------------+ |
-         |                                                                                                                |
-         +----------------------------------------------------------------------------------------------------------------+
-</code></pre>
-
-To understand what this project does, it’s important to first understand what
-unified does: please read through the [unifiedjs/unified][unified] readme (the
-part until you hit the API section is required reading).
-
-react-markdown is a unified pipeline — wrapped so that most folks don’t need
-to directly interact with unified.
-The processor goes through these steps:
-
-- parse markdown to mdast (markdown syntax tree)
-- transform through remark (markdown ecosystem)
-- transform mdast to hast (HTML syntax tree)
-- transform through rehype (HTML ecosystem)
-- render hast to React with components
-
-## Appendix A: HTML in markdown
-
-react-markdown typically escapes HTML (or ignores it, with skipHtml)
-because it is dangerous and defeats the purpose of this library.
-
-However, if you are in a trusted environment (you trust the markdown), and
-can spare the bundle size (±60kb minzipped), then you can use
-[rehype-raw][rehype-raw]:
-
-jsx
-import React from "react";
-import { createRoot } from "react-dom/client";
-import Markdown from "react-markdown";
-import rehypeRaw from "rehype-raw";
-
-const markdown = <div class="note">
-
-Some _emphasis_ and <strong>strong</strong>!
-
-</div>;
-
-createRoot(document.body).render(
-<Markdown rehypePlugins={[rehypeRaw]}>{markdown}</Markdown>
-);
-
-<details>
-<summary>Show equivalent JSX</summary>
-
-jsx
-
-<div className="note">
-  <p>
-    Some <em>emphasis</em> and <strong>strong</strong>!
-  </p>
-</div>
-
-</details>
-
-**Note**: HTML in markdown is still bound by how [HTML works in
-CommonMark][commonmark-html].
-Make sure to use blank lines around block-level HTML that again contains
-markdown!
-
-## Appendix B: Components
-
-You can also change the things that come from markdown:
-
-jsx
-<Markdown
-components={{
-    // Map h1 (# heading) to use h2s.
-    h1: "h2",
-    // Rewrite ems (*like so*) to i with a red foreground color.
-    em(props) {
-      const { node, ...rest } = props;
-      return <i style={{ color: "red" }} {...rest} />;
-},
-}}
-/>
-
-The keys in components are HTML equivalents for the things you write with
-markdown (such as h1 for # heading).
-Normally, in markdown, those are: a, blockquote, br, code, em, h1,
-h2, h3, h4, h5, h6, hr, img, li, ol, p, pre, strong, and
-ul.
-With [remark-gfm][remark-gfm], you can also use del, input, table,
-tbody, td, th, thead, and tr.
-Other remark or rehype plugins that add support for new constructs will also
-work with react-markdown.
-
-The props that are passed are what you probably would expect: an a (link) will
-get href (and title) props, and img (image) an src, alt and title,
-etc.
-
-Every component will receive a node.
-This is the original [Element from hast][hast-element] element being turned
-into a React element.
-
-## Appendix C: line endings in markdown (and JSX)
-
-You might have trouble with how line endings work in markdown and JSX.
-We recommend the following, which solves all line ending problems:
-
-jsx
-// If you write actual markdown in your code, put your markdown in a variable;
-// **do not indent markdown**:
-const markdown =
-
-# This is perfect!
-
-;
-
-// Pass the value as an expresion as an only child:
-const result = <Markdown>{markdown}</Markdown>;
-
-👆 That works.
-Read on for what doesn’t and why that is.
-
-You might try to write markdown directly in your JSX and find that it **does
-not** work:
-
-jsx
-<Markdown># Hi This is **not** a paragraph.</Markdown>
-
-The is because in JSX the whitespace (including line endings) is collapsed to
-a single space.
-So the above example is equivalent to:
-
-jsx
-<Markdown> # Hi This is **not** a paragraph. </Markdown>
-
-Instead, to pass markdown to Markdown, you can use an expression:
-with a template literal:
-
-jsx
-<Markdown>{
-
-# Hi
-
-This is a paragraph.
-}</Markdown>
-
-Template literals have another potential problem, because they keep whitespace
-(including indentation) inside them.
-That means that the following **does not** turn into a heading:
-
-jsx
-<Markdown>{ # This is **not** a heading, it’s an indented code block
-}</Markdown>
-
-## Security
-
-Use of react-markdown is secure by default.
-Overwriting urlTransform to something insecure will open you up to XSS
-vectors.
-Furthermore, the remarkPlugins, rehypePlugins, and components you use may
-be insecure.
-
-To make sure the content is completely safe, even after what plugins do,
-use [rehype-sanitize][rehype-sanitize].
-It lets you define your own schema of what is and isn’t allowed.
-
-## Related
-
-- [MDX][mdx]
-  — JSX _in_ markdown
-- [remark-gfm][remark-gfm]
-  — add support for GitHub flavored markdown support
-- [react-remark][react-remark]
-  — hook based alternative
-- [rehype-react][rehype-react]
-  — turn HTML into React elements
-
-## Contribute
-
-See [contributing.md][contributing] in [remarkjs/.github][health] for ways
-to get started.
-See [support.md][support] for ways to get help.
-
-This project has a [code of conduct][coc].
-By interacting with this repository, organization, or community you agree to
-abide by its terms.
+// parse an HTML body into a string
+app.use(bodyParser.text({ type: "text/html" }));
+```
 
 ## License
 
-[MIT][license] © [Espen Hovlandsdal][author]
+[MIT](LICENSE)
 
-[build-badge]: https://github.com/remarkjs/react-markdown/workflows/main/badge.svg
-[build]: https://github.com/remarkjs/react-markdown/actions
-[coverage-badge]: https://img.shields.io/codecov/c/github/remarkjs/react-markdown.svg
-[coverage]: https://codecov.io/github/remarkjs/react-markdown
-[downloads-badge]: https://img.shields.io/npm/dm/react-markdown.svg
-[downloads]: https://www.npmjs.com/package/react-markdown
-[size-badge]: https://img.shields.io/bundlejs/size/react-markdown
-[size]: https://bundlejs.com/?q=react-markdown
-[sponsors-badge]: https://opencollective.com/unified/sponsors/badge.svg
-[backers-badge]: https://opencollective.com/unified/backers/badge.svg
-[collective]: https://opencollective.com/unified
-[chat-badge]: https://img.shields.io/badge/chat-discussions-success.svg
-[chat]: https://github.com/remarkjs/remark/discussions
-[npm]: https://docs.npmjs.com/cli/install
-[esm]: https://gist.github.com/sindresorhus/a39789f98801d908bbc7ff3ecc99d99c
-[esmsh]: https://esm.sh
-[health]: https://github.com/remarkjs/.github
-[coc]: https://github.com/remarkjs/.github/blob/main/code-of-conduct.md
-[contributing]: https://github.com/remarkjs/.github/blob/main/contributing.md
-[support]: https://github.com/remarkjs/.github/blob/main/support.md
-[license]: license
-[author]: https://espen.codes/
-[awesome-remark]: https://github.com/remarkjs/awesome-remark
-[awesome-rehype]: https://github.com/rehypejs/awesome-rehype
-[commonmark-help]: https://commonmark.org/help/
-[commonmark-html]: https://spec.commonmark.org/0.30/#html-blocks
-[hast-element]: https://github.com/syntax-tree/hast#element
-[hast-node]: https://github.com/syntax-tree/hast#nodes
-[mdx]: https://github.com/mdx-js/mdx/
-[micromark]: https://github.com/micromark/micromark
-[react]: http://reactjs.org
-[react-remark]: https://github.com/remarkjs/react-remark
-[react-syntax-highlighter]: https://github.com/react-syntax-highlighter/react-syntax-highlighter
-[rehype]: https://github.com/rehypejs/rehype
-[rehype-katex]: https://github.com/remarkjs/remark-math/tree/main/packages/rehype-katex
-[rehype-plugin]: https://github.com/topics/rehype-plugin
-[rehype-plugins]: https://github.com/rehypejs/rehype/blob/main/doc/plugins.md#list-of-plugins
-[rehype-react]: https://github.com/rehypejs/rehype-react
-[rehype-raw]: https://github.com/rehypejs/rehype-raw
-[rehype-sanitize]: https://github.com/rehypejs/rehype-sanitize
-[remark]: https://github.com/remarkjs/remark
-[remark-gfm]: https://github.com/remarkjs/remark-gfm
-[remark-math]: https://github.com/remarkjs/remark-math
-[remark-plugin]: https://github.com/topics/remark-plugin
-[remark-plugins]: https://github.com/remarkjs/remark/blob/main/doc/plugins.md#list-of-plugins
-[remark-rehype-options]: https://github.com/remarkjs/remark-rehype#options
-[unified]: https://github.com/unifiedjs/unified
-[typescript]: https://www.typescriptlang.org
-[conor]: https://github.com/conorhastings
-[demo]: https://remarkjs.github.io/react-markdown/
-[section-components]: #appendix-b-components
-[section-plugins]: #plugins
-[section-security]: #security
-[section-syntax]: #syntax
-[api-allow-element]: #allowelement
-[api-components]: #components
-[api-default-url-transform]: #defaulturltransformurl
-[api-extra-props]: #extraprops
-[api-markdown]: #markdown
-[api-options]: #options
-[api-url-transform]: #urltransform
+[ci-image]: https://badgen.net/github/checks/expressjs/body-parser/master?label=ci
+[ci-url]: https://github.com/expressjs/body-parser/actions/workflows/ci.yml
+[coveralls-image]: https://badgen.net/coveralls/c/github/expressjs/body-parser/master
+[coveralls-url]: https://coveralls.io/r/expressjs/body-parser?branch=master
+[node-version-image]: https://badgen.net/npm/node/body-parser
+[node-version-url]: https://nodejs.org/en/download
+[npm-downloads-image]: https://badgen.net/npm/dm/body-parser
+[npm-url]: https://npmjs.org/package/body-parser
+[npm-version-image]: https://badgen.net/npm/v/body-parser
