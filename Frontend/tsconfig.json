@@ -18,8 +18,14 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "@components": ["./src/components/index.ts"],
+      "@types": ["./src/types/index.ts"],
+      "@lib": ["./src/library/index.ts"]
+    }
   },
+
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
