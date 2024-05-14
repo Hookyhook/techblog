@@ -1,7 +1,7 @@
-import "./App.css";
+import "./Root.css";
 import { BlogEntry } from "@components";
 
-function App() {
+function Root() {
   return (
     <>
       <BlogEntry />
@@ -9,4 +9,4 @@ function App() {
   );
 }
 
-export default App;
+export default Root;
