@@ -1,12 +1,7 @@
 import "./Root.css";
-import { BlogEntry } from "@components";
 
 function Root() {
-  return (
-    <>
-      <BlogEntry />
-    </>
-  );
+  return <></>;
 }
 
 export default Root;
