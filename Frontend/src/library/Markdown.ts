@@ -1,12 +1,15 @@
-import { markdownConfiguration } from "@lib";
-export async function getAllMarkdownPagesRaw() {
-  const promises = markdownConfiguration.map(
-    async (singleMarkdownConfiguration) => {
-      const response = await fetch(singleMarkdownConfiguration.url);
-      return response.text();
-    }
-  );
+import { BlogMarkdownPage } from "@types";
+import { markdownConfiguration } from "./markdownConfiguration";
 
-  const rawMarkdownPages = await Promise.all(promises);
-  return rawMarkdownPages;
+export async function getAllMarkdownPages(): Promise<BlogMarkdownPage[]> {
+  return await Promise.all(
+    markdownConfiguration.map(async (config) => {
+      const response = await fetch(config.url);
+      const markdown = await response.text();
+      return {
+        name: config.title,
+        markdown,
+      };
+    })
+  );
 }

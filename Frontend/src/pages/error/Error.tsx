@@ -6,22 +6,22 @@ export default function Error() {
 
   return (
     <>
-      <div className=" text-center flex flex-col gap-5 mt-4">
+      <div className="text-center flex flex-col gap-5 mt-4 md:mt-9">
         <div className=" text-9xl">{error.status}</div>
         <div className="text-4xl">
           Uhhhh, looks like you've looked for my CSS-Skills
         </div>
-        <div className=" text-gray-400 text-xl">
+        <div className="text-gray-400 text-xl">
           Dont worry I have not found them either
         </div>
-        <div
+        <button
           onClick={() => {
             navigate(-1);
           }}
-          className=" text-4xl w-1/2 md:w-1/4 mx-auto bg-gray-500 bg-opacity-40 rounded-lg p-2 hover:bg-grey-700 hover:bg-opacity-100"
+          className="text-3xl w-1/2 md:w-1/3 mx-auto bg-primary bg-opacity-40 rounded-2xl p-4 hover:bg-secondary hover:bg-opacity-100 border-none font-bold"
         >
           Let's go back to my place
-        </div>
+        </button>
       </div>
     </>
   );

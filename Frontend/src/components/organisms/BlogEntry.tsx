@@ -5,14 +5,20 @@ import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { dracula } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import rehypeRaw from "rehype-raw";
-import { getAllMarkdownPagesRaw } from "@lib";
-
-export function BlogEntry() {
-  const [markdown, setMarkdown] = useState<string[]>([]);
+import { getAllMarkdownPages } from "@lib";
+interface BlogEntryProps {
+  entryName: string;
+}
+export function BlogEntry({ entryName }: BlogEntryProps) {
+  const [markdown, setMarkdown] = useState<string>();
 
   useEffect(() => {
-    getAllMarkdownPagesRaw().then((rawMarkdown) => {
-      setMarkdown(rawMarkdown);
+    getAllMarkdownPages().then((allMarkdownPages) => {
+      setMarkdown(
+        allMarkdownPages.filter((markdownPage) => {
+          return markdownPage.name == entryName;
+        })[0].markdown
+      );
     });
   }, []);
   return (
@@ -43,7 +49,7 @@ export function BlogEntry() {
         },
       }}
     >
-      {markdown[0]}
+      {markdown}
     </Markdown>
   );
 }
