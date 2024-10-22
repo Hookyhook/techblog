@@ -1,8 +1,8 @@
 import { BlogMarkdownConfiguration } from "@types";
 export const markdownConfiguration: BlogMarkdownConfiguration[] = [
   {
-    title: "Test",
+    title: "test",
     description: "Test",
-    url: "./test.md",
+    url: "/test.md",
   },
 ];

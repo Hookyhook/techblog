@@ -1,5 +1,9 @@
 import { BlogEntry } from "@components";
+import { useSearchParams } from "react-router-dom";
 
 export default function BlogPost() {
-  return <BlogEntry entryName="Test" />;
+  const [searchParams] = useSearchParams();
+  const blogPostName = searchParams.get("blogPostName");
+
+  return <BlogEntry entryName={blogPostName!} />;
 }
